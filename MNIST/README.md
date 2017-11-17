@@ -1,4 +1,4 @@
-- MNIST  
-  - tensorflow: convnet (tf.nn and tf.layers)  
-  - neon: convnet  
+MNIST:  
+- tensorflow: convnet (tf.nn and tf.layers)  
+- neon: convnet  
 
