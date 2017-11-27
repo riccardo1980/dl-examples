@@ -24,8 +24,7 @@ Examples:
 
 """
 
-from neon.callbacks.callbacks import Callbacks
-from neon.data import MNIST
+from neon.callbacks.callbacks import Callbacks, Callback
 from neon.initializers import Gaussian, Constant
 from neon.layers import GeneralizedCost, Affine, Conv, Pooling, Dropout
 from neon.models import Model
@@ -34,49 +33,87 @@ from neon.transforms import Rectlin, Logistic, CrossEntropyMulti, Accuracy, Soft
 from neon.util.argparser import NeonArgparser
 from neon import logger as neon_logger
 
+from RawMNIST import RawMNIST
+from ConservativeArrayIterator import ConservativeArrayIterator
 
-# parse the command line arguments
-parser = NeonArgparser(__doc__)
+class PrintBatchNumber(Callback):
+  """
+  Simple callback to print train set size, as seen at epoch start
+  """
+  def on_epoch_end(self, callback_data, model, epoch):
+    """
+    Print at epoch start
+    """
+    print('Train set size (epoch %g): %g ' % (epoch, model.nbatches))
 
-args = parser.parse_args()
 
-# load up the mnist data set
-dataset = MNIST(path=args.data_dir)
-train_set = dataset.train_iter
-valid_set = dataset.valid_iter
+if __name__ == '__main__':
+  """
+  Main function
 
-# setup weight initialization function
-init_norm = Gaussian(loc=0.0, scale=0.1)
+  - argument parsiong
+  - dataset load
+  - iterators creation
+  - nn definiton
+  - cost function definition
+  - optimizer definition
+  - learning phase
+  - accuracy evaluation
+  """
+  # parse the command line arguments
+  parser = NeonArgparser(__doc__)
 
-relu=Rectlin()
+  args = parser.parse_args()
 
-conv1 = dict(init=init_norm, batch_norm=False, 
-        activation=relu, bias=Constant(0.1))
+  # load up the mnist data set
+  dataset = RawMNIST(path=args.data_dir)
+  (X_train, y_train), (X_test, y_test), nclass = dataset.load_data()
 
-# setup model layers
-layers = [Conv((5,5,32), padding=2, **conv1),
-          Pooling(2, strides=2), 
-          Conv((5,5,64), padding=2, **conv1),
-          Pooling(2, strides=2), 
-          Affine(nout=1024, init=init_norm, activation=relu),
-          Dropout(0.5),
-          Affine(nout=10, init=init_norm, activation=Softmax())]
+  train_set = ConservativeArrayIterator(X_train,
+                                        y_train,
+                                        nclass=nclass,
+                                        lshape=(1, 28, 28),
+                                        name='train')
+  valid_set = ConservativeArrayIterator(X_test,
+                                        y_test,
+                                        nclass=nclass,
+                                        lshape=(1, 28, 28),
+                                        name='valid')
 
-# setup cost function as CrossEntropy
-cost = GeneralizedCost(costfunc=CrossEntropyMulti())
+  # setup weight initialization function
+  init_norm = Gaussian(loc=0.0, scale=0.1)
 
-# setup optimizer
-optimizer = GradientDescentMomentum(
-    0.1, momentum_coef=0.9, stochastic_round=args.rounding)
+  relu=Rectlin()
 
-# initialize model object
-conv = Model(layers=layers)
+  conv1 = dict(init=init_norm, batch_norm=False,
+          activation=relu, bias=Constant(0.1))
 
-# configure callbacks
-callbacks = Callbacks(conv, eval_set=valid_set, **args.callback_args)
+  # setup model layers
+  layers = [Conv((5,5,32), padding=2, **conv1),
+            Pooling(2, strides=2),
+            Conv((5,5,64), padding=2, **conv1),
+            Pooling(2, strides=2),
+            Affine(nout=1024, init=init_norm, activation=relu),
+            Dropout(0.5),
+            Affine(nout=10, init=init_norm, activation=Softmax())]
 
-# run fit
-conv.fit(train_set, optimizer=optimizer,
-        num_epochs=args.epochs, cost=cost, callbacks=callbacks)
-accuracy = conv.eval(valid_set, metric=Accuracy())
-neon_logger.display('Accuracy = %.1f%%' % (accuracy * 100))
+  # setup cost function as CrossEntropy
+  cost = GeneralizedCost(costfunc=CrossEntropyMulti())
+
+  # setup optimizer
+  optimizer = GradientDescentMomentum(
+      0.1, momentum_coef=0.9, stochastic_round=args.rounding)
+
+  # initialize model object
+  conv = Model(layers=layers)
+
+  # configure callbacks
+  callbacks = Callbacks(conv, eval_set=valid_set, **args.callback_args)
+  callbacks.add_callback(PrintBatchNumber(epoch_freq=1))
+
+  # run fit
+  conv.fit(train_set, optimizer=optimizer,
+          num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+
+  accuracy = conv.eval(valid_set, metric=Accuracy())
+  neon_logger.display('Accuracy = %.1f%%' % (accuracy * 100))
