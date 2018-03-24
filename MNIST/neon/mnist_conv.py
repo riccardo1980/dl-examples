@@ -33,7 +33,7 @@ from neon.transforms import Rectlin, Logistic, CrossEntropyMulti, Accuracy, Soft
 from neon.util.argparser import NeonArgparser
 from neon import logger as neon_logger
 
-from RawMNIST import RawMNIST
+from LecunMNIST import LecunMNIST
 from ConservativeArrayIterator import ConservativeArrayIterator
 
 class PrintBatchNumber(Callback):
@@ -65,8 +65,9 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
+  """
   # load up the mnist data set
-  dataset = RawMNIST(path=args.data_dir)
+  dataset = LecunMNIST(path=args.data_dir)
   (X_train, y_train), (X_test, y_test), nclass = dataset.load_data()
 
   train_set = ConservativeArrayIterator(X_train,
@@ -79,6 +80,46 @@ if __name__ == '__main__':
                                         nclass=nclass,
                                         lshape=(1, 28, 28),
                                         name='valid')
+  """
+  from neon.data.dataloaderadapter import DataLoaderAdapter
+  from neon.data.dataloader_transformers import TypeCast, OneHot
+  from aeon import DataLoader
+  from GreyValueNormalize import GreyValueNormalize
+  import numpy as np
+
+  image_config =        {"type": "image",
+                         "height": 28,
+                         "width": 28,
+                         "channels": 1}
+
+  label_config =        {"type": "label",
+                         "binary": True}
+
+  augmentation_config = {"type": "image"}
+
+  aeon_config_train = {"manifest_filename": "train/train.tsv",
+                       "manifest_root": "./",
+                       "etl": (image_config, label_config),
+                       "batch_size": args.batch_size}
+
+  aeon_config_valid = {"manifest_filename": "test/test.tsv",
+                       "manifest_root": "./",
+                       "etl": (image_config, label_config),
+                       "batch_size": args.batch_size}
+
+  train_set = DataLoaderAdapter(DataLoader(aeon_config_train))
+  train_set = TypeCast(train_set, index = 0, dtype = np.float32)
+  train_set = GreyValueNormalize(train_set, index = 0,
+                             source_range = [0., 255.],
+                             target_range = [0., 1.])
+  train_set = OneHot(train_set, index = 1, nclasses = 10)
+
+  valid_set = DataLoaderAdapter(DataLoader(aeon_config_valid))
+  valid_set = TypeCast(valid_set, index = 0, dtype = np.float32)
+  valid_set = GreyValueNormalize(valid_set, index = 0,
+                             source_range = [0., 255.],
+                             target_range = [0., 1.])
+  valid_set = OneHot(valid_set, index = 1, nclasses = 10)
 
   # setup weight initialization function
   init_norm = Gaussian(loc=0.0, scale=0.1)
@@ -111,6 +152,13 @@ if __name__ == '__main__':
   callbacks = Callbacks(conv, eval_set=valid_set, **args.callback_args)
   callbacks.add_callback(PrintBatchNumber(epoch_freq=1))
 
+  """
+  import numpy as np
+  for (x,l) in train_set:
+    print(np.argmax(l.get(), axis=0))
+    print(x.get()[:,0])
+    break
+  """
   # run fit
   conv.fit(train_set, optimizer=optimizer,
           num_epochs=args.epochs, cost=cost, callbacks=callbacks)
