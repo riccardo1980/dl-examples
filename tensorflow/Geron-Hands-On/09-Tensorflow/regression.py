@@ -117,45 +117,41 @@ class LogisticRegression:
 
         with tf.Graph().as_default():
             # placeholders and variables
-            # tX = tf.placeholder(tf.float32, shape=(None, self._n_features), name='X')
-            # ty = tf.placeholder(tf.float32, shape=(None, 1), name='y')
-            # theta = tf.Variable(tf.zeros([self._n_features, 1]), name='theta')
+            tX = tf.placeholder(tf.float32, shape=(None, self._n_features), name='X')
+            ty = tf.placeholder(tf.float32, shape=(None, 1), name='y')
+            theta = tf.Variable(tf.zeros([self._n_features, 1]), name='theta')
             
             # initialization step
-            # init = tf.global_variables_initializer()
+            init = tf.global_variables_initializer()
 
-            # evaluate predictions
-            # TODO
+            # evaluate probabilities
+            predicted_proba = tf.math.sigmoid(tf.matmul(tX, theta), 'predicted_proba')
             
-            # TODO change objective function according to above code
-            # optimizer = tf.train.GradientDescentOptimizer(learning_rate=self._learning_rate)
-            # training_op = optimizer.minimize(mse, name='training_op')
-            
+            loss = tf.losses.log_loss(ty, predicted_proba)
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate=self._learning_rate)
+            training_op = optimizer.minimize(loss, name='training_op')            
 
             # summary
-            # TODO change objective function according to above code
-            # mse_summary = tf.summary.scalar('MSE', mse)
-            # file_writer = tf.summary.FileWriter('tmp', tf.get_default_graph())
+            loss_summary = tf.summary.scalar('loss', loss)
+            file_writer = tf.summary.FileWriter('tmp', tf.get_default_graph())
+            saver = tf.train.Saver()   
 
-            # saver = tf.train.Saver()
-            
-            # with tf.Session() as sess:
-                
-            #     sess.run(init)
-            #     for epoch in range(self._n_epochs):
-            #         for X_batch, y_batch in data.batch(X, y, epoch):
-            #             _, mse_batch = sess.run([training_op, mse], feed_dict={tX: X_batch, ty: y_batch} )
+            with tf.Session() as sess:    
+                sess.run(init)
+                for epoch in range(self._n_epochs):
+                    for X_batch, y_batch in data.batch(X, y, epoch):
+                        _, loss_batch = sess.run([training_op, loss], feed_dict={tX: X_batch, ty: y_batch} )
 
-            #         if epoch % self._print_every == 0 or epoch == self._n_epochs-1:
-            #             print('Epoch {: 5d}, MSE {:4.2e}'.format(epoch, mse_batch))
+                    if epoch % self._print_every == 0 or epoch == self._n_epochs-1:
+                        print('Epoch {: 5d}, loss {:4.2e}'.format(epoch, loss_batch))
                         
-            #             save_path = saver.save(sess, 'tmp/model.ckpt')
-            #             file_writer.add_summary(mse_summary.eval(feed_dict={tX: X_batch, ty: y_batch}), epoch)
+                        save_path = saver.save(sess, 'tmp/model.ckpt')
+                        file_writer.add_summary(loss_summary.eval(feed_dict={tX: X_batch, ty: y_batch}), epoch)
 
-            #     self._theta = theta.eval()
-            #     save_path = saver.save(sess, 'tmp/model_final.ckpt')
+                self._theta = theta.eval()
+                save_path = saver.save(sess, 'tmp/model_final.ckpt')
             
-            #     file_writer.close()
+                file_writer.close()
         return self
     
     def predict(self, X):
@@ -165,13 +161,15 @@ class LogisticRegression:
         if X.shape[1] != self._n_features:
             raise ShapesNotCompatibleError()
         
-        # graph = tf.Graph()
-        # with graph.as_default():
-        #     tX = tf.placeholder(tf.float32, shape=(None, self._n_features), name='X')
-        #     theta = tf.placeholder(tf.float32, shape=(self._n_features, 1), name='theta')
-        #     pred = tf.matmul(tX, theta)
+        graph = tf.Graph()
+        with graph.as_default():
+            tX = tf.placeholder(tf.float32, shape=(None, self._n_features), name='X')
+            theta = tf.placeholder(tf.float32, shape=(self._n_features, 1), name='theta')
+            predicted_proba = tf.math.sigmoid(tf.matmul(tX, theta), 'predicted_proba')
 
-        #     with tf.Session() as sess:
-        #         predictions = sess.run(pred, feed_dict={tX: X, theta: self._theta})
+            classes = tf.cast(predicted_proba + 0.5, tf.int32)
 
-        # return predictions
+            with tf.Session() as sess:
+                predictions = sess.run(classes, feed_dict={tX: X, theta: self._theta})
+
+        return predictions
