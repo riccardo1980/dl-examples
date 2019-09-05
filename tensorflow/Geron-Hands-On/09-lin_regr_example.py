@@ -8,7 +8,7 @@ import numpy as np
 import warnings 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore",category=FutureWarning)
-    from regression import LinearRegression
+    from chap09_resources.regression import LinearRegression
 
 def report(y_true, y):
     metrics = [explained_variance_score, max_error, mean_absolute_error, mean_squared_error, r2_score]
